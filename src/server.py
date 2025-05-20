@@ -83,133 +83,19 @@ async def get_project(project_id: str) -> dict:
         project = client.projects.get(project_id)
         return {
             "id": project.id,
+            "version": project.version,
+            "key": project.key,
             "name": project.name,
             "description": getattr(project, 'description', None),
+            "lead": convert_reference(project.lead),
             "status": getattr(project, 'status', None),
-            "created_at": getattr(project, 'createdAt', None),
-            "updated_at": getattr(project, 'updatedAt', None)
+            "startDate": getattr(project, 'startDate', None),
+            "endDate": getattr(project, 'endDate', None)
         }
     except NotFound:
         return {"error": f"Project {project_id} not found"}
     except Exception as e:
         return {"error": f"Failed to get project: {str(e)}"}
-
-@mcp.tool()
-async def create_project(fields: Dict[str, Any]) -> dict:
-    """Create a new project in Yandex Tracker.
-    
-    Args:
-        fields: Dictionary of project fields and their values
-    """
-    try:
-        project = client.projects.create(**fields)
-        return {
-            "id": project.id,
-            "name": project.name,
-            "description": getattr(project, 'description', None),
-            "status": getattr(project, 'status', None),
-            "created_at": getattr(project, 'createdAt', None),
-            "updated_at": getattr(project, 'updatedAt', None)
-        }
-    except Exception as e:
-        return {"error": f"Failed to create project: {str(e)}"}
-
-@mcp.tool()
-async def update_project(project_id: str, fields: Dict[str, Any]) -> dict:
-    """Update an existing project in Yandex Tracker.
-    
-    Args:
-        project_id: Project ID to update
-        fields: Dictionary of fields to update and their new values
-    """
-    try:
-        project = client.projects.get(project_id)
-        for key, value in fields.items():
-            setattr(project, key, value)
-        project.save()
-        return {
-            "id": project.id,
-            "name": project.name,
-            "description": getattr(project, 'description', None),
-            "status": getattr(project, 'status', None),
-            "created_at": getattr(project, 'createdAt', None),
-            "updated_at": getattr(project, 'updatedAt', None)
-        }
-    except NotFound:
-        return {"error": f"Project {project_id} not found"}
-    except Exception as e:
-        return {"error": f"Failed to update project: {str(e)}"}
-
-@mcp.tool()
-async def delete_project(project_id: str) -> dict:
-    """Delete a project from Yandex Tracker.
-    
-    Args:
-        project_id: Project ID to delete
-    """
-    try:
-        project = client.projects.get(project_id)
-        project.delete()
-        return {"message": f"Project {project_id} successfully deleted"}
-    except NotFound:
-        return {"error": f"Project {project_id} not found"}
-    except Exception as e:
-        return {"error": f"Failed to delete project: {str(e)}"}
-
-@mcp.tool()
-async def search_projects(
-    input: Optional[str] = None,
-    filter: Optional[Dict[str, Any]] = None,
-    order_by: Optional[str] = None,
-    order_asc: Optional[bool] = True,
-    root_only: Optional[bool] = None,
-    per_page: Optional[int] = 50,
-    page: Optional[int] = 1,
-    fields: Optional[List[str]] = None
-) -> dict:
-    """Search for projects in Yandex Tracker.
-    
-    Args:
-        input: Optional substring in project name
-        filter: Optional dictionary of filter criteria
-        order_by: Optional field to sort by
-        order_asc: Optional sort direction (True for ascending)
-        root_only: Optional flag to show only non-nested projects
-        per_page: Number of results per page (default: 50)
-        page: Page number (default: 1)
-        fields: Optional list of fields to include in response
-    """
-    try:
-        search_params = {
-            "perPage": per_page,
-            "page": page
-        }
-        if input:
-            search_params["input"] = input
-        if filter:
-            search_params["filter"] = filter
-        if order_by:
-            search_params["orderBy"] = order_by
-            search_params["orderAsc"] = order_asc
-        if root_only is not None:
-            search_params["rootOnly"] = root_only
-        if fields:
-            search_params["fields"] = ",".join(fields)
-
-        results = client.projects.find(**search_params)
-        return {
-            "projects": [{
-                "id": project.id,
-                "name": project.name,
-                "description": getattr(project, 'description', None),
-                "status": getattr(project, 'status', None),
-                "created_at": getattr(project, 'createdAt', None),
-                "updated_at": getattr(project, 'updatedAt', None)
-            } for project in results],
-            "total": len(results)
-        }
-    except Exception as e:
-        return {"error": f"Failed to search projects: {str(e)}"}
 
 @mcp.tool()
 async def get_issue(issue_id: str) -> dict:
@@ -315,14 +201,18 @@ async def move_issue(issue_id: str, queue: str) -> dict:
 
 @mcp.tool()
 async def count_issues(query: str) -> dict:
-    """Count issues matching the specified query.
+    """Count issues in Yandex Tracker matching the query.
     
     Args:
-        query: Search query in Yandex Tracker query language
+        query: Query string in Yandex Tracker query language
     """
     try:
-        count = client.issues.count(query)
-        return {"count": count}
+        # Make a POST request to the count endpoint
+        response = client._connection.post(
+            path='/v3/issues/_count',
+            data={'query': query}
+        )
+        return {"count": response}
     except Exception as e:
         return {"error": f"Failed to count issues: {str(e)}"}
 

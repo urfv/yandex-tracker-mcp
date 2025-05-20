@@ -1,40 +1,121 @@
 # Yandex Tracker MCP Server
 
-A simple MCP server for interacting with Yandex Tracker API.
+MCP-сервер для интеграции Яндекс Трекера с Claude через Model Context Protocol (MCP). Это базовая версия с минимумом методов, которая позволяет Claude просматривать и управлять задачами в вашем Яндекс Трекере. Контрибьюшены с остальными методами приветствуются! 
 
-## Setup
+## Настройка
 
-1. Install dependencies:
+1. Установите зависимости:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Create a `.env` file with your Yandex Tracker credentials:
-```bash
-cp .env.example .env
-```
-Then edit `.env` and add your:
-- YANDEX_TRACKER_TOKEN: Your OAuth token
-- YANDEX_TRACKER_ORG_ID: Your organization ID
+2. Создайте файл `.env` с вашими учетными данными Яндекс Трекера:
+- YANDEX_TRACKER_TOKEN: Ваш токен авторизации
+- YANDEX_TRACKER_ORG_ID: ID вашей организации
 
-## Running the Server
+## Подключение сервера к Claude Desktop
 
 ```bash
-python -m src.server
+mcp install main.py --name
 ```
 
-## Available Tools
+## Доступные инструменты
 
-### Get Issue
-Retrieves issue details from Yandex Tracker.
+### Получение проекта
+Получает информацию о проекте из Яндекс Трекера.
 
-Input:
+Входные данные:
+```json
+{
+    "project_id": "123"
+}
+```
+
+### Получение задачи
+Получает информацию о задаче из Яндекс Трекера.
+
+Входные данные:
 ```json
 {
     "issue_id": "ISSUE-123"
 }
 ```
 
-## Testing
+### Создание задачи
+Создает новую задачу в Яндекс Трекере.
 
-Use MCP Inspector to test the server functionality. 
+Входные данные:
+```json
+{
+    "queue": "TEST",
+    "summary": "Новая задача",
+    "description": "Описание задачи",
+    "type": "task",
+    "priority": "normal",
+    "assignee": "user123"
+}
+```
+
+### Редактирование задачи
+Редактирует существующую задачу в Яндекс Трекере.
+
+Входные данные:
+```json
+{
+    "issue_id": "ISSUE-123",
+    "summary": "Обновленное название",
+    "description": "Новое описание",
+    "type": "bug",
+    "priority": "high",
+    "assignee": "user456"
+}
+```
+
+### Перемещение задачи
+Перемещает задачу в другую очередь.
+
+Входные данные:
+```json
+{
+    "issue_id": "ISSUE-123",
+    "queue": "NEW-QUEUE"
+}
+```
+
+### Подсчет задач
+Подсчитывает количество задач, соответствующих запросу.
+
+Входные данные:
+```json
+{
+    "query": "Queue: TEST AND Status: Open"
+}
+```
+
+### Поиск задач
+Ищет задачи с использованием языка запросов Яндекс Трекера.
+
+Входные данные:
+```json
+{
+    "query": "Queue: TEST AND Status: Open",
+    "per_page": 50,
+    "page": 1
+}
+```
+
+### Связывание задач
+Связывает две задачи между собой.
+
+Входные данные:
+```json
+{
+    "source_issue": "ISSUE-123",
+    "target_issue": "ISSUE-456",
+    "link_type": "relates"
+}
+```
+
+## Тестирование
+
+Используйте MCP Inspector для тестирования функциональности сервера. 
