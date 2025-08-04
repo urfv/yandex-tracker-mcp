@@ -222,12 +222,67 @@ async def search_issues(
     per_page: Optional[int] = 50,
     page: Optional[int] = 1
 ) -> dict:
-    """Search for issues using Yandex Tracker query language.
-    
+    """
+    Search for issues using Yandex Tracker query language.
+
+    Query language rules:
+    - You can search by any field, e.g.:
+        Project, Queue, Status, Assignee, Reporter, Priority, Type, Summary, Description, Created, Updated, Resolved, Component, Version, Sprint, Epic, Parent, Child, Key, Comment, Comment Author, Boards, Tags, Story Points, Time Spent, History, Modifier, Resolver, Component Owner, Queue Owner, Related, Related To Queue, Relates, Linked to, Is Subtask For, Is Parent Task For, Is Epic Of, Is Dependent By, Is Duplicated By, Clone, Clones Of Queue, Block Queue, Old Queue, Subtasks For Queue, In Epics Of Queue, Sprint In Progress By Board, Sprints By Board, Start Date, Last Comment, etc.
+    - Use logical operators: AND, OR, NOT
+    - Use comparison operators: =, !=, >, <, >=, <=, ~ (contains), !~ (does not contain), IN, NOT IN, IS EMPTY, IS NOT EMPTY
+    - For text fields, use ~ for substring match, # for exact match, ! for negation
+    - Date fields support comparison (>, <, >=, <=)
+    - You can group conditions with parentheses
+
+    Examples:
+        Queue: TEST AND Status: Open
+        Project: "Perpetuum mobile"
+        Assignee: user123 OR Reporter: user456
+        Priority: High AND Type: Bug
+        Created: > 2024-01-01
+        Summary: ~ "ошибка"
+        Description: #"Избранное"
+        Comment: "отличная работа"
+        Key: "TASK-123", "TASK-321"
+        (Queue: TEST OR Queue: PROD) AND Status: Open
+        Comment Author: "Иван Иванов"
+        Last Comment: < now()-1h
+        Is Subtask For: "TASK-123"
+        Linked to: "TASK-321"
+        Boards: "My Board"
+        Tags: "Поддержка", "wiki"
+        Story Points: >=5
+        Time Spent: >"5d 2h 30m"
+        History: "проще простого"
+        Modifier: user3370@
+        Resolver: "Иван Иванов"
+        Component Owner: user3370@
+        Queue Owner: "Иван Иванов"
+        Related: user3370@, "Иван Иванов"
+        Related To Queue: Тестирование
+        Relates: "TASK-123", "TASK-321"
+        Is Parent Task For: "TASK-123"
+        Is Epic Of: "TASK-123"
+        Is Dependent By: "TASK-123"
+        Is Duplicated By: "TASK-123"
+        Clone: "TASK-123", "TASK-321"
+        Clones Of Queue: TEST, DEVELOP
+        Block Queue: TEST
+        Old Queue: TEST
+        Subtasks For Queue: TEST
+        In Epics Of Queue: Тестирование
+        Sprint In Progress By Board: 87
+        Sprints By Board: 87
+        Start Date: <2017-01-30
+
+    See full documentation: https://yandex.ru/support/tracker/ru/user/query-filter#filter-parameters
+
     Args:
         query: Search query in Yandex Tracker query language
         per_page: Number of issues per page (default: 50)
         page: Page number (default: 1)
+    Returns:
+        Dictionary with 'issues' list and 'total' count
     """
     try:
         issues = client.issues.find(query, per_page=per_page, page=page)
@@ -260,6 +315,93 @@ async def link_issues(source_issue: str, target_issue: str, link_type: str) -> d
         return {"error": f"Issue not found: {str(e)}"}
     except Exception as e:
         return {"error": f"Failed to link issues: {str(e)}"}
+
+@mcp.tool()
+async def get_boards() -> dict:
+    """Get all boards from Yandex Tracker.
+    
+    Returns a list of all boards available in the organization.
+    """
+    try:
+        # Make a GET request to get all boards
+        response = client._connection.get(path='/v3/boards')
+        return {
+            "boards": response,
+            "total": len(response) if response else 0
+        }
+    except Exception as e:
+        return {"error": f"Failed to get boards: {str(e)}"}
+
+@mcp.tool()
+async def get_board(board_id: str) -> dict:
+    """Get a specific board from Yandex Tracker.
+    
+    Args:
+        board_id: Board ID to retrieve
+    """
+    try:
+        # Make a GET request to get a specific board
+        response = client._connection.get(path=f'/v3/boards/{board_id}')
+        return response
+    except Exception as e:
+        return {"error": f"Failed to get board: {str(e)}"}
+
+@mcp.tool()
+async def get_issue_comments(issue_id: str) -> dict:
+    """Get all comments for a given issue in Yandex Tracker.
+    
+    Args:
+        issue_id: Issue key to retrieve comments for
+    """
+    try:
+        # Make a GET request to the comments endpoint
+        response = client._connection.get(
+            path=f'/v2/issues/{issue_id}/comments',
+            params={'expand': 'all'}
+        )
+        
+        # Process the PaginatedList response
+        comments_data = []
+        if response:
+            # Convert PaginatedList to list
+            comments_list = list(response)
+            
+            for comment in comments_list:
+                # Extract data more safely
+                author_info = comment.get('createdBy', {}) if hasattr(comment, 'get') else getattr(comment, 'createdBy', {})
+                author_display = author_info.get('display', 'Unknown') if isinstance(author_info, dict) else str(author_info)
+                
+                # Handle both dict-like and object-like access
+                if hasattr(comment, 'get'):
+                    comment_data = {
+                        "id": comment.get('id'),
+                        "text": comment.get('text', ''),
+                        "author": author_display,
+                        "created_at": comment.get('createdAt'),
+                        "updated_at": comment.get('updatedAt'),
+                        "version": comment.get('version')
+                    }
+                else:
+                    comment_data = {
+                        "id": getattr(comment, 'id', None),
+                        "text": getattr(comment, 'text', ''),
+                        "author": author_display,
+                        "created_at": getattr(comment, 'createdAt', None),
+                        "updated_at": getattr(comment, 'updatedAt', None),
+                        "version": getattr(comment, 'version', None)
+                    }
+                
+                comments_data.append(comment_data)
+        
+        return {
+            "issue_id": issue_id,
+            "comments": comments_data,
+            "total": len(comments_data)
+        }
+    except NotFound:
+        return {"error": f"Issue {issue_id} not found"}
+    except Exception as e:
+        return {"error": f"Failed to get comments: {str(e)}"}
 
 if __name__ == "__main__":
     mcp.run() 
